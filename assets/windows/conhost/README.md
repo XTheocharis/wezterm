@@ -14,14 +14,19 @@ and/or the build for the terminal project make some more progress.
 
 https://github.com/wezterm/wezterm/issues/1927
 
-These assets were built by cloning the ms-terminal repo and running:
+The bundled binaries in this directory are the official signed Microsoft
+Windows Terminal release binaries.  They were downloaded from the release
+zip/nupkg by running `./assets/windows/conhost/update-fetch.sh`; they were
+not built from source by the WezTerm project.
 
-```
-.\tools\razzle.cmd
-bcz rel
-```
-
-then the files can be copied from `bin/x64/Release` to this location.
+To build equivalent assets from source instead, run
+`./assets/windows/conhost/update-build.ps1` on a Windows host with
+Visual Studio 2022 (VCTools workload, VC.Tools.x86.x64, Windows11SDK.26100,
+VC.ATL). The script clones microsoft/terminal at the pinned tag, restores
+NuGet packages, and builds the 3 target projects with
+`WindowsTerminalBranding=Release` so that OpenConsoleProxy.dll embeds the
+WezTerm-compatible CLSID. Run `pwsh -File update-build.ps1 -CopyPdb` to
+also copy debug symbols.
 
 It's possible that you'll need to download this runtime support package
 from MS in order for this to work:
