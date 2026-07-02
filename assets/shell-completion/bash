@@ -54,6 +54,9 @@ _wezterm() {
             wezterm,start)
                 cmd="wezterm__start"
                 ;;
+            wezterm,terminal-host)
+                cmd="wezterm__terminal__host"
+                ;;
             wezterm__cli,activate-pane)
                 cmd="wezterm__cli__activate__pane"
                 ;;
@@ -216,6 +219,9 @@ _wezterm() {
             wezterm__help,start)
                 cmd="wezterm__help__start"
                 ;;
+            wezterm__help,terminal-host)
+                cmd="wezterm__help__terminal__host"
+                ;;
             wezterm__help__cli,activate-pane)
                 cmd="wezterm__help__cli__activate__pane"
                 ;;
@@ -273,6 +279,30 @@ _wezterm() {
             wezterm__help__cli,zoom-pane)
                 cmd="wezterm__help__cli__zoom__pane"
                 ;;
+            wezterm__help__terminal__host,disable)
+                cmd="wezterm__help__terminal__host__disable"
+                ;;
+            wezterm__help__terminal__host,enable)
+                cmd="wezterm__help__terminal__host__enable"
+                ;;
+            wezterm__terminal__host,disable)
+                cmd="wezterm__terminal__host__disable"
+                ;;
+            wezterm__terminal__host,enable)
+                cmd="wezterm__terminal__host__enable"
+                ;;
+            wezterm__terminal__host,help)
+                cmd="wezterm__terminal__host__help"
+                ;;
+            wezterm__terminal__host__help,disable)
+                cmd="wezterm__terminal__host__help__disable"
+                ;;
+            wezterm__terminal__host__help,enable)
+                cmd="wezterm__terminal__host__help__enable"
+                ;;
+            wezterm__terminal__host__help,help)
+                cmd="wezterm__terminal__host__help__help"
+                ;;
             *)
                 ;;
         esac
@@ -280,7 +310,7 @@ _wezterm() {
 
     case "${cmd}" in
         wezterm)
-            opts="-n -h -V --skip-config --config-file --config --help --version start blocking-start ssh serial connect ls-fonts show-keys cli imgcat set-working-directory record replay shell-completion help"
+            opts="-n -h -V --skip-config --config-file --config --help --version start blocking-start ssh serial connect ls-fonts show-keys terminal-host cli imgcat set-working-directory record replay shell-completion help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1096,7 +1126,7 @@ _wezterm() {
             return 0
             ;;
         wezterm__help)
-            opts="start blocking-start ssh serial connect ls-fonts show-keys cli imgcat set-working-directory record replay shell-completion help"
+            opts="start blocking-start ssh serial connect ls-fonts show-keys terminal-host cli imgcat set-working-directory record replay shell-completion help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1571,6 +1601,48 @@ _wezterm() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        wezterm__help__terminal__host)
+            opts="enable disable"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__help__terminal__host__disable)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__help__terminal__host__enable)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         wezterm__imgcat)
             opts="-h --width --height --no-preserve-aspect-ratio --position --no-move-cursor --hold --tmux-passthru --max-pixels --no-resample --resample-format --resample-filter --resize --show-resample-timing --help [FILE_NAME]"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
@@ -1811,6 +1883,104 @@ _wezterm() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__terminal__host)
+            opts="-h --help enable disable help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__terminal__host__disable)
+            opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__terminal__host__enable)
+            opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__terminal__host__help)
+            opts="enable disable help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__terminal__host__help__disable)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__terminal__host__help__enable)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        wezterm__terminal__host__help__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
                 *)
                     COMPREPLY=()
                     ;;
