@@ -271,3 +271,21 @@ pub struct ShowKeysCommand {
     #[arg(long)]
     pub key_table: Option<String>,
 }
+
+#[derive(Debug, Parser, Clone)]
+pub struct TerminalHostCommand {
+    #[command(subcommand)]
+    pub sub: TerminalHostSub,
+}
+
+#[derive(Debug, Parser, Clone)]
+pub enum TerminalHostSub {
+    /// Enable WezTerm as the Windows default terminal.
+    #[command(name = "enable")]
+    Enable,
+
+    /// Disable WezTerm as the Windows default terminal and restore the
+    /// previous selection.
+    #[command(name = "disable")]
+    Disable,
+}
