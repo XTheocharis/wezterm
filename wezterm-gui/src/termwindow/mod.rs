@@ -463,6 +463,8 @@ pub struct TermWindow {
     gl: Option<Rc<glium::backend::Context>>,
     webgpu: Option<Rc<WebGpuState>>,
     config_subscription: Option<config::ConfigSubscription>,
+    #[cfg(windows)]
+    termhost_icon: Option<crate::termhost::OwnedHIcon>,
 }
 
 impl TermWindow {
@@ -788,6 +790,8 @@ impl TermWindow {
             key_table_state: KeyTableState::default(),
             modal: RefCell::new(None),
             opengl_info: None,
+            #[cfg(windows)]
+            termhost_icon: None,
         };
 
         let tw = Rc::new(RefCell::new(myself));
@@ -884,6 +888,10 @@ impl TermWindow {
             }
             myself.load_os_parameters();
             window.show();
+            #[cfg(windows)]
+            {
+                myself.termhost_icon = crate::termhost::apply_pending_window_state(&window);
+            }
             myself.subscribe_to_pane_updates();
             myself.emit_window_event("window-config-reloaded", None);
             myself.emit_status_event();

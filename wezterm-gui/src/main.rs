@@ -52,6 +52,8 @@ mod shapecache;
 mod spawn;
 mod stats;
 mod tabbar;
+#[cfg(windows)]
+mod termhost;
 mod termwindow;
 mod unicode_names;
 mod uniforms;
@@ -131,6 +133,11 @@ enum SubCommand {
 
     #[command(name = "show-keys", about = "Show key assignments")]
     ShowKeys(ShowKeysCommand),
+
+    /// Manage the Windows default terminal host configuration.
+    #[command(name = "terminal-host")]
+    #[cfg(windows)]
+    TerminalHost(TerminalHostCommand),
 }
 
 async fn async_run_ssh(opts: SshCommand) -> anyhow::Result<()> {
@@ -281,7 +288,7 @@ fn have_panes_in_domain_and_ws(domain: &Arc<dyn Domain>, workspace: &Option<Stri
     }
 }
 
-async fn spawn_tab_in_domain_if_mux_is_empty(
+pub(crate) async fn spawn_tab_in_domain_if_mux_is_empty(
     cmd: Option<CommandBuilder>,
     is_connecting: bool,
     domain: Option<Arc<dyn Domain>>,
@@ -418,6 +425,12 @@ async fn async_run_terminal_gui(
     ))?;
     if let Err(err) = spawn_mux_server(unix_socket_path, should_publish) {
         log::warn!("{:#}", err);
+    }
+
+    #[cfg(windows)]
+    if crate::termhost::scm_launched() {
+        crate::termhost::await_handoff();
+        return Ok(());
     }
 
     if !opts.no_auto_connect {
@@ -774,6 +787,10 @@ fn run_terminal_gui(opts: StartCommand, default_domain_name: Option<String>) -> 
     )? {
         return Ok(());
     }
+
+    // Drop order matters: `HandoffGuard` must drop before `CoinitGuard`.
+    #[cfg(windows)]
+    let _termhost_state = crate::termhost::install();
 
     let gui = crate::frontend::try_new()?;
     let activity = Activity::new();
@@ -1178,7 +1195,15 @@ fn run() -> anyhow::Result<()> {
         }
     }
 
-    let opts = Opt::parse();
+    // Strip SCM-appended `-Embedding` before clap parsing.
+    #[cfg(windows)]
+    let (argv, scm_launched) = crate::termhost::preprocess_argv();
+    #[cfg(not(windows))]
+    let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let opts = Opt::parse_from(argv);
+
+    #[cfg(windows)]
+    crate::termhost::set_scm_launched(scm_launched);
 
     // This is a bit gross.
     // In order to not to automatically open a standard windows console when
@@ -1274,5 +1299,7 @@ fn run() -> anyhow::Result<()> {
         ),
         SubCommand::LsFonts(cmd) => run_ls_fonts(config, &cmd),
         SubCommand::ShowKeys(cmd) => run_show_keys(config, &cmd),
+        #[cfg(windows)]
+        SubCommand::TerminalHost(cmd) => crate::termhost::cli::run(cmd),
     }
 }
