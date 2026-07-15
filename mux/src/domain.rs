@@ -258,6 +258,44 @@ impl LocalDomain {
         false
     }
 
+    /// Wrap an externally-provided PTY and child as a `LocalPane`.
+    ///
+    /// Unlike `spawn_pane`, this does NOT register the pane with the
+    /// `Mux` (no `add_pane` call). The caller MUST register the returned
+    /// pane via `Mux::add_pane` or `Mux::add_tab_and_active_pane`.
+    pub fn attach_external_pane(
+        &self,
+        size: TerminalSize,
+        pty: Box<dyn MasterPty + Send>,
+        child: Box<dyn portable_pty::Child + Send + Sync>,
+        command_description: String,
+    ) -> anyhow::Result<Arc<dyn Pane>> {
+        let pane_id = alloc_pane_id();
+        let writer = WriterWrapper::new(pty.take_writer()?);
+
+        let mut terminal = wezterm_term::Terminal::new(
+            size,
+            std::sync::Arc::new(config::TermConfig::new()),
+            "WezTerm",
+            config::wezterm_version(),
+            Box::new(writer.clone()),
+        );
+        // The PTY is always a ConPTY hosted by OpenConsole.exe.
+        terminal.enable_conpty_quirks();
+
+        let pane: Arc<dyn Pane> = Arc::new(LocalPane::new(
+            pane_id,
+            terminal,
+            child,
+            pty,
+            Box::new(writer),
+            self.id,
+            command_description,
+        ));
+
+        Ok(pane)
+    }
+
     #[cfg(windows)]
     fn is_conpty(&self) -> bool {
         let pty_system = self.pty_system.lock();

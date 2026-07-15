@@ -131,6 +131,11 @@ enum SubCommand {
 
     #[command(name = "show-keys", about = "Show key assignments")]
     ShowKeys(ShowKeysCommand),
+
+    /// Manage the Windows default terminal host configuration.
+    #[command(name = "terminal-host")]
+    #[cfg(windows)]
+    TerminalHost(TerminalHostCommand),
 }
 
 async fn async_run_ssh(opts: SshCommand) -> anyhow::Result<()> {
@@ -405,6 +410,27 @@ fn cell_pixel_dims(config: &ConfigHandle, dpi: f64) -> anyhow::Result<(usize, us
     ))
 }
 
+#[cfg(windows)]
+fn host_spawn_fallback_tab() -> wezterm_termhost::SpawnFuture {
+    Box::pin(async move {
+        if let Err(e) = spawn_tab_in_domain_if_mux_is_empty(None, false, None, None).await {
+            log::error!("Fallback spawn failed: {e:#}");
+        }
+    })
+}
+
+#[cfg(windows)]
+fn host_trigger_gui_attached(domain_id: usize) -> wezterm_termhost::SpawnFuture {
+    Box::pin(async move {
+        trigger_and_log_gui_attached(MuxDomain(domain_id)).await;
+    })
+}
+
+#[cfg(windows)]
+fn host_cell_pixel_dims(dpi: f64) -> anyhow::Result<(usize, usize)> {
+    cell_pixel_dims(&config::configuration(), dpi)
+}
+
 async fn async_run_terminal_gui(
     cmd: Option<CommandBuilder>,
     opts: StartCommand,
@@ -418,6 +444,12 @@ async fn async_run_terminal_gui(
     ))?;
     if let Err(err) = spawn_mux_server(unix_socket_path, should_publish) {
         log::warn!("{:#}", err);
+    }
+
+    #[cfg(windows)]
+    if wezterm_termhost::scm_launched() {
+        wezterm_termhost::await_handoff();
+        return Ok(());
     }
 
     if !opts.no_auto_connect {
@@ -774,6 +806,14 @@ fn run_terminal_gui(opts: StartCommand, default_domain_name: Option<String>) -> 
     )? {
         return Ok(());
     }
+
+    // Drop order matters: `HandoffGuard` must drop before `CoinitGuard`.
+    #[cfg(windows)]
+    let _termhost_state = wezterm_termhost::install(wezterm_termhost::HostFunctions {
+        spawn_fallback_tab: host_spawn_fallback_tab,
+        trigger_gui_attached: host_trigger_gui_attached,
+        cell_pixel_dims: host_cell_pixel_dims,
+    });
 
     let gui = crate::frontend::try_new()?;
     let activity = Activity::new();
@@ -1178,7 +1218,15 @@ fn run() -> anyhow::Result<()> {
         }
     }
 
-    let opts = Opt::parse();
+    // Strip SCM-appended `-Embedding` before clap parsing.
+    #[cfg(windows)]
+    let (argv, scm_launched) = wezterm_termhost::preprocess_argv();
+    #[cfg(not(windows))]
+    let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let opts = Opt::parse_from(argv);
+
+    #[cfg(windows)]
+    wezterm_termhost::set_scm_launched(scm_launched);
 
     // This is a bit gross.
     // In order to not to automatically open a standard windows console when
@@ -1197,6 +1245,11 @@ fn run() -> anyhow::Result<()> {
             winapi::um::wincon::AttachConsole(winapi::um::wincon::ATTACH_PARENT_PROCESS);
         }
     };
+
+    #[cfg(windows)]
+    if let Some(SubCommand::TerminalHost(cmd)) = opts.cmd.clone() {
+        return wezterm_termhost::cli::run(cmd);
+    }
 
     env_bootstrap::bootstrap();
     // window_funcs is not set up by env_bootstrap as window_funcs is
@@ -1274,5 +1327,7 @@ fn run() -> anyhow::Result<()> {
         ),
         SubCommand::LsFonts(cmd) => run_ls_fonts(config, &cmd),
         SubCommand::ShowKeys(cmd) => run_show_keys(config, &cmd),
+        #[cfg(windows)]
+        SubCommand::TerminalHost(cmd) => wezterm_termhost::cli::run(cmd),
     }
 }
