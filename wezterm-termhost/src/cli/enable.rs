@@ -1,0 +1,215 @@
+pub struct EnableCommand {}
+
+impl EnableCommand {
+    pub fn run() -> anyhow::Result<()> {
+        crate::registration::capture_delegation_backup()?;
+        register_local_server_for_unpackaged()?;
+        register_openconsole_fallback();
+        register_proxy_stub_per_user();
+        crate::register_termhost()?;
+        println!(
+            "WezTerm is now the Windows default terminal.\n\
+             \n\
+             Terminal CLSID : {}\n\
+             Console CLSID  : {} (Microsoft OpenConsole.exe; bundled copy registered as fallback)\n\
+             Registry key   : HKCU\\Console\\%%Startup\\DelegationConsole, DelegationTerminal",
+            crate::WEZTERM_TERMHOST_TERMINAL_CLSID,
+            crate::WEZTERM_TERMHOST_FALLBACK_CONSOLE_CLSID
+        );
+        println!(
+            "\nRegistered HKCU\\Software\\Classes\\CLSID\\{}\\LocalServer32 -> wezterm-gui.exe.",
+            crate::WEZTERM_TERMHOST_TERMINAL_CLSID
+        );
+        Ok(())
+    }
+}
+
+fn register_local_server_for_unpackaged() -> anyhow::Result<()> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| anyhow::anyhow!("determining wezterm-gui.exe path: {}", e))?;
+
+    let clsid = crate::WEZTERM_TERMHOST_TERMINAL_CLSID;
+    register_local_server_for_clsid(clsid, &exe_path)
+}
+
+fn register_local_server_for_clsid(clsid: &str, exe_path: &std::path::Path) -> anyhow::Result<()> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    let exe_str = exe_path.to_string_lossy();
+    let key_path = crate::registration::clsid_registry_path(clsid);
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey(&key_path)
+        .map_err(|e| anyhow::anyhow!("creating HKCU\\{}: {}", key_path, e))?;
+    key.set_value("", &"WezTerm Default Terminal Handoff")
+        .map_err(|e| anyhow::anyhow!("writing default value: {}", e))?;
+
+    let (local_server, _) = key
+        .create_subkey("LocalServer32")
+        .map_err(|e| anyhow::anyhow!("creating LocalServer32: {}", e))?;
+    let cmd_line = format!("\"{}\"", exe_str);
+    local_server
+        .set_value("", &cmd_line)
+        .map_err(|e| anyhow::anyhow!("writing LocalServer32 value: {}", e))?;
+    key.set_value(crate::WEZTERM_OWNED_VALUE, &1u32)
+        .map_err(|e| anyhow::anyhow!("writing WezTermOwned marker: {}", e))?;
+
+    Ok(())
+}
+
+fn register_openconsole_fallback() {
+    if let Err(e) = crate::register_openconsole_fallback() {
+        eprintln!("warning: OpenConsole fallback registration skipped: {}", e);
+    } else if crate::resolve_bundled_openconsole_path().is_none() {
+        eprintln!(
+            "warning: bundled OpenConsole.exe not found. \
+                 Console launches will crash with 0xc0000142 until \
+                 OpenConsole.exe is available next to wezterm-gui.exe."
+        );
+    }
+}
+
+fn register_proxy_stub_per_user() {
+    if let Some(dll) = crate::resolve_proxy_stub_dll_path() {
+        if let Err(e) = crate::register_proxy_stub_per_user(&dll) {
+            eprintln!("warning: proxy/stub registration skipped: {}", e);
+        }
+    } else if !crate::is_wt_installed() {
+        eprintln!(
+            "note: proxy/stub DLL not found next to wezterm-gui.exe; \
+                 skipping per-user registration. The DLL is bundled in \
+                 assets/windows/conhost/ and copied by the build."
+        );
+    } else {
+        eprintln!(
+            "note: proxy/stub DLL not found; relying on Windows Terminal's \
+             MSIX-packaged proxy stub. If defterm does not work, install \
+             OpenConsoleProxy.dll next to wezterm-gui.exe."
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::test_helpers::{
+        cleanup_backup_values, StartupKeyGuard, TestClsid, DELEGATION_CONSOLE, DELEGATION_TERMINAL,
+        LAST_TERMINAL, STARTUP_KEY,
+    };
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    /// Verify that capture_delegation_backup skips when WezTerm is already default
+    /// (idempotency — doesn't overwrite the original pre-WezTerm capture).
+    #[test]
+    fn capture_skips_when_wezterm_already_default() {
+        let _guard = crate::registration::BACKUP_TEST_GUARD
+            .lock()
+            .unwrap();
+        let _startup_guard = StartupKeyGuard::capture();
+        cleanup_backup_values();
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let (startup, _) = hkcu.create_subkey(STARTUP_KEY).unwrap();
+
+        // Set Delegation* to WezTerm's CLSIDs (simulating already-default).
+        // Both values must be set so current_registration() returns Some,
+        // which is required for the idempotency guard to fire.
+        startup
+            .set_value(
+                DELEGATION_CONSOLE,
+                &crate::WEZTERM_TERMHOST_FALLBACK_CONSOLE_CLSID.to_string(),
+            )
+            .unwrap();
+        startup
+            .set_value(
+                DELEGATION_TERMINAL,
+                &crate::WEZTERM_TERMHOST_TERMINAL_CLSID.to_string(),
+            )
+            .unwrap();
+        // Write a stale backup value that should NOT be overwritten
+        startup
+            .set_value(LAST_TERMINAL, &"{OLD-VALUE}".to_string())
+            .unwrap();
+
+        crate::registration::capture_delegation_backup().unwrap();
+
+        // Re-open key — the function may have recreated it internally
+        let startup = hkcu.open_subkey_with_flags(STARTUP_KEY, KEY_READ).unwrap();
+        let last: String = startup.get_value(LAST_TERMINAL).unwrap();
+        assert_eq!(last, "{OLD-VALUE}");
+    }
+
+    /// Verify that capture_delegation_backup writes when another host is default.
+    #[test]
+    fn capture_writes_when_other_default() {
+        let _guard = crate::registration::BACKUP_TEST_GUARD
+            .lock()
+            .unwrap();
+        let _startup_guard = StartupKeyGuard::capture();
+        cleanup_backup_values();
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let (startup, _) = hkcu.create_subkey(STARTUP_KEY).unwrap();
+
+        startup
+            .set_value(DELEGATION_CONSOLE, &"{OTHER-CONSOLE}".to_string())
+            .unwrap();
+        startup
+            .set_value(DELEGATION_TERMINAL, &"{OTHER-TERMINAL}".to_string())
+            .unwrap();
+
+        crate::registration::capture_delegation_backup().unwrap();
+
+        let console: String = startup.get_value("WezTerm_Last_Console").unwrap();
+        let terminal: String = startup.get_value(LAST_TERMINAL).unwrap();
+        assert_eq!(console, "{OTHER-CONSOLE}");
+        assert_eq!(terminal, "{OTHER-TERMINAL}");
+    }
+
+    /// Verify that capture_delegation_backup writes null GUID when no default exists.
+    #[test]
+    fn capture_writes_null_guid_when_no_default() {
+        let _guard = crate::registration::BACKUP_TEST_GUARD
+            .lock()
+            .unwrap();
+        let _startup_guard = StartupKeyGuard::capture();
+        cleanup_backup_values();
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let (startup, _) = hkcu.create_subkey(STARTUP_KEY).unwrap();
+        let _ = startup.delete_value(DELEGATION_CONSOLE);
+        let _ = startup.delete_value(DELEGATION_TERMINAL);
+
+        crate::registration::capture_delegation_backup().unwrap();
+
+        // Re-open key — capture created it fresh after we deleted it
+        let startup = hkcu.open_subkey_with_flags(STARTUP_KEY, KEY_READ).unwrap();
+        let console: String = startup.get_value("WezTerm_Last_Console").unwrap();
+        let terminal: String = startup.get_value(LAST_TERMINAL).unwrap();
+        assert_eq!(console, "{00000000-0000-0000-0000-000000000000}");
+        assert_eq!(terminal, "{00000000-0000-0000-0000-000000000000}");
+    }
+
+    /// Verify that local-server registration creates the expected registry
+    /// entries with WezTerm ownership marker.
+    #[test]
+    fn enable_registers_local_server() {
+        let test_key = TestClsid::new();
+        let exe_path = std::env::current_exe().unwrap();
+        register_local_server_for_clsid(&test_key.clsid, &exe_path).unwrap();
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let key_path = test_key.key_path();
+        let key = hkcu.open_subkey_with_flags(&key_path, KEY_READ).unwrap();
+
+        let name: String = key.get_value("").unwrap();
+        assert!(name.contains("WezTerm"));
+
+        let owned: u32 = key.get_value(crate::WEZTERM_OWNED_VALUE).unwrap();
+        assert_eq!(owned, 1u32);
+
+        let local_server = key.open_subkey("LocalServer32").unwrap();
+        let exe: String = local_server.get_value("").unwrap();
+        assert_eq!(exe, format!("\"{}\"", exe_path.to_string_lossy()));
+    }
+}

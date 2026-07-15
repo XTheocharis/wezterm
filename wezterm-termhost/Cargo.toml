@@ -1,0 +1,41 @@
+[package]
+name = "wezterm-termhost"
+version = "0.1.0"
+authors = ["Wez Furlong <wez@wezfurlong.org>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+config.workspace = true
+filedescriptor.workspace = true
+log.workspace = true
+mux.workspace = true
+parking_lot.workspace = true
+portable-pty.workspace = true
+promise.workspace = true
+smol.workspace = true
+wezterm-gui-subcommands.workspace = true
+wezterm-term.workspace = true
+window.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winapi = { workspace = true, features = [
+    "combaseapi",
+    "fileapi",
+    "guiddef",
+    "handleapi",
+    "minwinbase",
+    "namedpipeapi",
+    "ntdef",
+    "oleauto",
+    "processthreadsapi",
+    "synchapi",
+    "unknwnbase",
+    "winbase",
+    "winerror",
+    "winnt",
+    "wtypes",
+    "wtypesbase",
+]}
+winreg.workspace = true
