@@ -7099,12 +7099,14 @@ dependencies = [
  "wezterm-open-url",
  "wezterm-ssh",
  "wezterm-term",
+ "wezterm-termhost",
  "wezterm-toast-notification",
  "wgpu",
  "winapi",
  "window",
  "window-funcs",
  "windows 0.33.0",
+ "winreg",
 ]
 
 [[package]]
@@ -7277,6 +7279,26 @@ dependencies = [
  "wezterm-dynamic",
  "wezterm-escape-parser",
  "wezterm-surface",
+]
+
+[[package]]
+name = "wezterm-termhost"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "config",
+ "filedescriptor",
+ "log",
+ "mux",
+ "parking_lot",
+ "portable-pty",
+ "promise",
+ "smol",
+ "wezterm-gui-subcommands",
+ "wezterm-term",
+ "winapi",
+ "window",
+ "winreg",
 ]
 
 [[package]]

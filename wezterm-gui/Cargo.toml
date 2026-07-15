@@ -98,6 +98,7 @@ wezterm-client.workspace = true
 wezterm-dynamic.workspace = true
 wezterm-font.workspace = true
 wezterm-gui-subcommands.workspace = true
+wezterm-termhost.workspace = true
 wezterm-mux-server-impl.workspace = true
 wezterm-open-url.workspace = true
 wezterm-ssh.workspace = true
@@ -117,7 +118,9 @@ winapi = { workspace=true, features = [
     "namedpipeapi",
     "synchapi",
     "winsock2",
+    "oleauto",
 ]}
+winreg.workspace = true
 windows = { workspace=true, features = [
     "Win32_UI_Shell",
 ]}
